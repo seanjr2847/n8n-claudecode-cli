@@ -1,0 +1,54 @@
+{
+	"name": "n8n-nodes-claudecode-cli",
+	"version": "0.1.0",
+	"description": "n8n community node for executing Claude Code CLI with Max plan support",
+	"keywords": [
+		"n8n-community-node-package",
+		"n8n",
+		"claude",
+		"claude-code",
+		"anthropic",
+		"ai",
+		"agent"
+	],
+	"license": "MIT",
+	"homepage": "",
+	"author": {
+		"name": "seanj"
+	},
+	"repository": {
+		"type": "git",
+		"url": ""
+	},
+	"main": "index.js",
+	"scripts": {
+		"build": "tsc && gulp build:icons",
+		"dev": "tsc --watch",
+		"prepublishOnly": "npm run build",
+		"lint": "tsc --noEmit"
+	},
+	"files": [
+		"dist"
+	],
+	"n8n": {
+		"n8nNodesApiVersion": 1,
+		"credentials": [
+			"dist/credentials/ClaudeCodeAuth.credentials.js"
+		],
+		"nodes": [
+			"dist/nodes/ClaudeCode/ClaudeCode.node.js"
+		]
+	},
+	"devDependencies": {
+		"@types/node": "^22.0.0",
+		"gulp": "^5.0.0",
+		"n8n-workflow": "^1.0.0",
+		"typescript": "^5.7.0"
+	},
+	"peerDependencies": {
+		"n8n-workflow": "*"
+	},
+	"dependencies": {
+		"@anthropic-ai/claude-agent-sdk": "^0.1.0"
+	}
+}
