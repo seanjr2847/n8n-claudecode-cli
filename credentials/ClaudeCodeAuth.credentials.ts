@@ -16,12 +16,12 @@ export class ClaudeCodeAuth implements ICredentialType {
 				{
 					name: 'Host Session (claude login)',
 					value: 'hostSession',
-					description: 'Use the Claude Code login session on the n8n host machine',
+					description: 'Requires: run "npm i -g @anthropic-ai/claude-code && claude login" on the n8n host. Docker: run inside the container or use OAuth Token instead.',
 				},
 				{
-					name: 'OAuth Token',
+					name: 'OAuth Token (Recommended for Docker)',
 					value: 'oauthToken',
-					description: 'Use an OAuth token from "claude setup-token"',
+					description: 'Run "claude setup-token" on any machine with Claude Code installed, then paste the token here.',
 				},
 			],
 			default: 'hostSession',
@@ -32,7 +32,7 @@ export class ClaudeCodeAuth implements ICredentialType {
 			type: 'string',
 			typeOptions: { password: true },
 			default: '',
-			description: 'Token obtained via "claude setup-token" command',
+			description: 'Token obtained via "claude setup-token" command. Steps: 1) Install Claude Code CLI, 2) Run "claude setup-token", 3) Paste the output token here.',
 			displayOptions: {
 				show: {
 					authMethod: ['oauthToken'],

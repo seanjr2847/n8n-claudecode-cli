@@ -66,9 +66,13 @@ export class ClaudeCode implements INodeType {
 				name: 'model',
 				type: 'options',
 				options: [
-					{ name: 'Sonnet', value: 'sonnet' },
-					{ name: 'Opus', value: 'opus' },
-					{ name: 'Haiku', value: 'haiku' },
+					{ name: 'Sonnet (Latest)', value: 'sonnet' },
+					{ name: 'Opus (Latest)', value: 'opus' },
+					{ name: 'Haiku (Latest)', value: 'haiku' },
+					{ name: 'Claude Sonnet 4.5', value: 'claude-sonnet-4-5-20250929' },
+					{ name: 'Claude Sonnet 4', value: 'claude-sonnet-4-20250514' },
+					{ name: 'Claude Opus 4', value: 'claude-opus-4-20250514' },
+					{ name: 'Claude Haiku 3.5', value: 'claude-3-5-haiku-20241022' },
 				],
 				default: 'sonnet',
 				description: 'Claude model to use',
@@ -82,6 +86,11 @@ export class ClaudeCode implements INodeType {
 						name: 'Plan (Read-Only)',
 						value: 'plan',
 						description: 'Analysis only, no file modifications',
+					},
+					{
+						name: 'Plan + Execute (Auto-Approve)',
+						value: 'planAndExecute',
+						description: 'Plan first, then execute with all permissions auto-approved',
 					},
 					{
 						name: 'Default',
@@ -238,6 +247,27 @@ export class ClaudeCode implements INodeType {
 						description: 'Whether to skip loading hooks, plugins, skills, and CLAUDE.md',
 					},
 					{
+						displayName: 'Load Settings From',
+						name: 'settingSources',
+						type: 'multiOptions',
+						options: [
+							{
+								name: 'User (~/.claude/settings.json)',
+								value: 'user',
+							},
+							{
+								name: 'Project (.claude/settings.json)',
+								value: 'project',
+							},
+							{
+								name: 'Local (.claude/settings.local.json)',
+								value: 'local',
+							},
+						],
+						default: [],
+						description: 'Load MCP servers, allowed tools, and permissions from Claude Code settings files. Docker: mount ~/.claude/ volume first.',
+					},
+					{
 						displayName: 'Debug',
 						name: 'debug',
 						type: 'boolean',
@@ -340,7 +370,7 @@ async function executeItem(
 	// ── Build SDK options ──
 	const options: Record<string, unknown> = {
 		model,
-		permissionMode,
+		permissionMode: permissionMode === 'planAndExecute' ? 'plan' : permissionMode,
 		env,
 	};
 
@@ -419,9 +449,12 @@ async function executeItem(
 		options.extraArgs = extraArgs;
 	}
 
-	// Setting sources (bare mode = none)
+	// Setting sources
+	const settingSources = advanced.settingSources as string[] | undefined;
 	if (advanced.bareMode) {
 		options.settingSources = [];
+	} else if (settingSources && settingSources.length > 0) {
+		options.settingSources = settingSources;
 	}
 
 	// ── MCP Servers ──
@@ -460,18 +493,59 @@ async function executeItem(
 	const timer = setTimeout(() => abortController.abort(), timeoutSec * 1000);
 	options.abortController = abortController;
 
+	// ── Helper: run a single query ──
+	async function runQuery(
+		queryPrompt: string,
+		queryOptions: Record<string, unknown>,
+	): Promise<{ messages: Record<string, unknown>[]; resultMessage: Record<string, unknown> | null }> {
+		const msgs: Record<string, unknown>[] = [];
+		let result: Record<string, unknown> | null = null;
+
+		const stream = query({ prompt: queryPrompt, options: queryOptions as any });
+		for await (const message of stream) {
+			if (message.type === 'result') {
+				result = message as unknown as Record<string, unknown>;
+			}
+			msgs.push(message as unknown as Record<string, unknown>);
+		}
+		return { messages: msgs, resultMessage: result };
+	}
+
 	// ── Execute query ──
-	const messages: Record<string, unknown>[] = [];
+	let messages: Record<string, unknown>[] = [];
 	let resultMessage: Record<string, unknown> | null = null;
 
 	try {
-		const stream = query({ prompt, options: options as any });
+		if (permissionMode === 'planAndExecute') {
+			// Phase 1: Plan
+			const planOptions: Record<string, unknown> = { ...options, permissionMode: 'plan' };
+			delete planOptions.allowDangerouslySkipPermissions;
+			const planResult = await runQuery(prompt, planOptions);
+			const planText = (planResult.resultMessage?.result as string) || '';
 
-		for await (const message of stream) {
-			if (message.type === 'result') {
-				resultMessage = message as unknown as Record<string, unknown>;
+			// Phase 2: Execute with auto-approve using the plan
+			clearTimeout(timer);
+			const executeAbort = new AbortController();
+			const executeTimer = setTimeout(() => executeAbort.abort(), timeoutSec * 1000);
+			try {
+				const executeOptions = {
+					...options,
+					permissionMode: 'bypassPermissions',
+					allowDangerouslySkipPermissions: true,
+					abortController: executeAbort,
+				};
+				const executePrompt = `Execute the following plan:\n\n${planText}\n\nOriginal request: ${prompt}`;
+				const executeResult = await runQuery(executePrompt, executeOptions);
+				messages = executeResult.messages;
+				resultMessage = executeResult.resultMessage;
+			} finally {
+				clearTimeout(executeTimer);
 			}
-			messages.push(message as unknown as Record<string, unknown>);
+		} else {
+			// Standard single-phase execution
+			const result = await runQuery(prompt, options);
+			messages = result.messages;
+			resultMessage = result.resultMessage;
 		}
 	} catch (error) {
 		if (error instanceof AbortError || (error instanceof Error && error.name === 'AbortError')) {
