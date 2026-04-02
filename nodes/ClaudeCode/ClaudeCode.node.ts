@@ -286,57 +286,163 @@ export class ClaudeCode implements INodeType {
 
 			// ── MCP Servers ──
 			{
-				displayName: 'MCP Servers (JSON)',
-				name: 'mcpServers',
-				type: 'json',
-				default: '',
-				placeholder: `{
-  "filesystem": {
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/data"]
-  },
-  "github": {
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-github"],
-    "env": { "GITHUB_TOKEN": "ghp_xxx" }
-  }
-}`,
-				description: 'MCP (Model Context Protocol) server configurations. Supports stdio (command+args), http (type+url), and sse (type+url+headers). Add "mcp__servername__*" to Allowed Tools to grant access.',
+				displayName: 'MCP Servers',
+				name: 'mcpServersCollection',
+				type: 'fixedCollection',
+				typeOptions: { multipleValues: true },
+				default: {},
+				placeholder: 'Add MCP Server',
+				options: [
+					{
+						displayName: 'Servers',
+						name: 'servers',
+						values: [
+							{
+								displayName: 'Server Name',
+								name: 'name',
+								type: 'string',
+								default: '',
+								placeholder: 'my-server',
+								description: 'Unique name for this server. Used in tool names as mcp__name__toolname.',
+							},
+							{
+								displayName: 'Type',
+								name: 'type',
+								type: 'options',
+								options: [
+									{ name: 'Stdio (command)', value: 'stdio' },
+									{ name: 'HTTP', value: 'http' },
+									{ name: 'SSE', value: 'sse' },
+								],
+								default: 'stdio',
+							},
+							{
+								displayName: 'Command',
+								name: 'command',
+								type: 'string',
+								default: 'npx',
+								placeholder: 'npx',
+								description: 'Command to run the MCP server',
+								displayOptions: { show: { type: ['stdio'] } },
+							},
+							{
+								displayName: 'Arguments',
+								name: 'args',
+								type: 'string',
+								default: '',
+								placeholder: '-y @modelcontextprotocol/server-filesystem /data',
+								description: 'Space-separated arguments for the command',
+								displayOptions: { show: { type: ['stdio'] } },
+							},
+							{
+								displayName: 'URL',
+								name: 'url',
+								type: 'string',
+								default: '',
+								placeholder: 'https://mcp-server.example.com',
+								displayOptions: { show: { type: ['http', 'sse'] } },
+							},
+							{
+								displayName: 'Environment Variables',
+								name: 'envVars',
+								type: 'string',
+								default: '',
+								placeholder: 'GITHUB_TOKEN=ghp_xxx,API_KEY=abc123',
+								description: 'Comma-separated KEY=VALUE pairs',
+							},
+						],
+					},
+				],
 			},
 
 			// ── Plugins ──
 			{
-				displayName: 'Plugins (JSON)',
-				name: 'plugins',
-				type: 'json',
-				default: '',
-				placeholder: `[
-  { "type": "local", "path": "/path/to/my-plugin" },
-  { "type": "local", "path": "./relative-plugin" }
-]`,
-				description: 'Claude Code plugins to load. Each plugin must have a .claude-plugin/plugin.json file. Currently only "local" type is supported. Plugins provide custom skills, agents, and hooks.',
+				displayName: 'Plugins',
+				name: 'pluginsCollection',
+				type: 'fixedCollection',
+				typeOptions: { multipleValues: true },
+				default: {},
+				placeholder: 'Add Plugin',
+				options: [
+					{
+						displayName: 'Plugins',
+						name: 'plugins',
+						values: [
+							{
+								displayName: 'Plugin Path',
+								name: 'path',
+								type: 'string',
+								default: '',
+								placeholder: '/path/to/my-plugin',
+								description: 'Absolute or relative path to the plugin directory (must contain .claude-plugin/plugin.json)',
+							},
+						],
+					},
+				],
 			},
 
 			// ── Agents ──
 			{
-				displayName: 'Custom Agents (JSON)',
-				name: 'agents',
-				type: 'json',
-				default: '',
-				placeholder: `{
-  "code-reviewer": {
-    "description": "Expert code review specialist",
-    "prompt": "Review code for security, performance, and best practices",
-    "tools": ["Read", "Grep", "Glob"],
-    "model": "opus"
-  },
-  "test-runner": {
-    "description": "Runs and analyzes test suites",
-    "prompt": "Execute tests and report results",
-    "tools": ["Bash", "Read"]
-  }
-}`,
-				description: 'Custom subagents that Claude can invoke via the Agent tool. Each agent has: description (when to use), prompt (system instructions), tools (optional restriction), model (optional override: sonnet/opus/haiku). Add "Agent" to Allowed Tools to enable.',
+				displayName: 'Custom Agents',
+				name: 'agentsCollection',
+				type: 'fixedCollection',
+				typeOptions: { multipleValues: true },
+				default: {},
+				placeholder: 'Add Agent',
+				options: [
+					{
+						displayName: 'Agents',
+						name: 'agents',
+						values: [
+							{
+								displayName: 'Agent Name',
+								name: 'name',
+								type: 'string',
+								default: '',
+								placeholder: 'code-reviewer',
+								description: 'Unique name for this agent',
+							},
+							{
+								displayName: 'Description',
+								name: 'description',
+								type: 'string',
+								default: '',
+								placeholder: 'Expert code review specialist',
+								description: 'When should Claude invoke this agent?',
+							},
+							{
+								displayName: 'Prompt',
+								name: 'prompt',
+								type: 'string',
+								typeOptions: { rows: 3 },
+								default: '',
+								placeholder: 'Review code for security, performance, and best practices',
+								description: 'System prompt for this agent',
+							},
+							{
+								displayName: 'Tools',
+								name: 'tools',
+								type: 'string',
+								default: '',
+								placeholder: 'Read,Grep,Glob,Bash',
+								description: 'Comma-separated tools this agent can use. Leave empty to inherit all.',
+							},
+							{
+								displayName: 'Model',
+								name: 'model',
+								type: 'options',
+								options: [
+									{ name: 'Inherit (same as parent)', value: '' },
+									{ name: 'Sonnet', value: 'sonnet' },
+									{ name: 'Opus', value: 'opus' },
+									{ name: 'Haiku', value: 'haiku' },
+								],
+								default: '',
+								description: 'Model override for this agent',
+							},
+						],
+					},
+				],
 			},
 		],
 	};
@@ -482,33 +588,72 @@ async function executeItem(
 		options.settingSources = settingSources;
 	}
 
-	// ── MCP Servers ──
-	const mcpServersStr = this.getNodeParameter('mcpServers', itemIndex, '') as string;
-	if (mcpServersStr) {
-		try {
-			options.mcpServers = JSON.parse(mcpServersStr);
-		} catch {
-			throw new NodeOperationError(this.getNode(), 'Invalid MCP Servers JSON', { itemIndex });
+	// ── MCP Servers (fixedCollection → SDK format) ──
+	const mcpCollection = this.getNodeParameter('mcpServersCollection', itemIndex, {}) as {
+		servers?: Array<{ name: string; type: string; command?: string; args?: string; url?: string; envVars?: string }>;
+	};
+	if (mcpCollection.servers && mcpCollection.servers.length > 0) {
+		const mcpServers: Record<string, unknown> = {};
+		for (const server of mcpCollection.servers) {
+			if (!server.name) continue;
+			const envObj: Record<string, string> = {};
+			if (server.envVars) {
+				for (const pair of server.envVars.split(',')) {
+					const [key, ...vals] = pair.split('=');
+					if (key?.trim()) envObj[key.trim()] = vals.join('=').trim();
+				}
+			}
+			if (server.type === 'stdio') {
+				mcpServers[server.name] = {
+					command: server.command || 'npx',
+					args: server.args ? server.args.split(/\s+/).filter(Boolean) : [],
+					...(Object.keys(envObj).length > 0 ? { env: envObj } : {}),
+				};
+			} else {
+				mcpServers[server.name] = {
+					type: server.type,
+					url: server.url || '',
+					...(Object.keys(envObj).length > 0 ? { headers: envObj } : {}),
+				};
+			}
+		}
+		if (Object.keys(mcpServers).length > 0) {
+			options.mcpServers = mcpServers;
 		}
 	}
 
-	// ── Plugins ──
-	const pluginsStr = this.getNodeParameter('plugins', itemIndex, '') as string;
-	if (pluginsStr) {
-		try {
-			options.plugins = JSON.parse(pluginsStr);
-		} catch {
-			throw new NodeOperationError(this.getNode(), 'Invalid Plugins JSON', { itemIndex });
-		}
+	// ── Plugins (fixedCollection → SDK format) ──
+	const pluginsCollection = this.getNodeParameter('pluginsCollection', itemIndex, {}) as {
+		plugins?: Array<{ path: string }>;
+	};
+	if (pluginsCollection.plugins && pluginsCollection.plugins.length > 0) {
+		options.plugins = pluginsCollection.plugins
+			.filter((p) => p.path)
+			.map((p) => ({ type: 'local' as const, path: p.path }));
 	}
 
-	// ── Agents ──
-	const agentsStr = this.getNodeParameter('agents', itemIndex, '') as string;
-	if (agentsStr) {
-		try {
-			options.agents = JSON.parse(agentsStr);
-		} catch {
-			throw new NodeOperationError(this.getNode(), 'Invalid Agents JSON', { itemIndex });
+	// ── Agents (fixedCollection → SDK format) ──
+	const agentsCollection = this.getNodeParameter('agentsCollection', itemIndex, {}) as {
+		agents?: Array<{ name: string; description: string; prompt: string; tools?: string; model?: string }>;
+	};
+	if (agentsCollection.agents && agentsCollection.agents.length > 0) {
+		const agents: Record<string, unknown> = {};
+		for (const agent of agentsCollection.agents) {
+			if (!agent.name) continue;
+			const def: Record<string, unknown> = {
+				description: agent.description,
+				prompt: agent.prompt,
+			};
+			if (agent.tools) {
+				def.tools = agent.tools.split(',').map((t: string) => t.trim()).filter(Boolean);
+			}
+			if (agent.model) {
+				def.model = agent.model;
+			}
+			agents[agent.name] = def;
+		}
+		if (Object.keys(agents).length > 0) {
+			options.agents = agents;
 		}
 	}
 
