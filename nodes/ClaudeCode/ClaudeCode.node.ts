@@ -286,32 +286,57 @@ export class ClaudeCode implements INodeType {
 
 			// ── MCP Servers ──
 			{
-				displayName: 'MCP Servers',
+				displayName: 'MCP Servers (JSON)',
 				name: 'mcpServers',
 				type: 'json',
 				default: '',
-				placeholder: '{"server-name": {"command": "npx", "args": ["-y", "mcp-server"]}}',
-				description: 'MCP server configurations as JSON object',
+				placeholder: `{
+  "filesystem": {
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/data"]
+  },
+  "github": {
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-github"],
+    "env": { "GITHUB_TOKEN": "ghp_xxx" }
+  }
+}`,
+				description: 'MCP (Model Context Protocol) server configurations. Supports stdio (command+args), http (type+url), and sse (type+url+headers). Add "mcp__servername__*" to Allowed Tools to grant access.',
 			},
 
 			// ── Plugins ──
 			{
-				displayName: 'Plugins',
+				displayName: 'Plugins (JSON)',
 				name: 'plugins',
 				type: 'json',
 				default: '',
-				placeholder: '[{"type": "local", "path": "./my-plugin"}]',
-				description: 'Plugin configurations as JSON array',
+				placeholder: `[
+  { "type": "local", "path": "/path/to/my-plugin" },
+  { "type": "local", "path": "./relative-plugin" }
+]`,
+				description: 'Claude Code plugins to load. Each plugin must have a .claude-plugin/plugin.json file. Currently only "local" type is supported. Plugins provide custom skills, agents, and hooks.',
 			},
 
 			// ── Agents ──
 			{
-				displayName: 'Agents',
+				displayName: 'Custom Agents (JSON)',
 				name: 'agents',
 				type: 'json',
 				default: '',
-				placeholder: '{"reviewer": {"description": "Code reviewer", "prompt": "Review code", "tools": ["Read","Grep"]}}',
-				description: 'Custom agent definitions as JSON object',
+				placeholder: `{
+  "code-reviewer": {
+    "description": "Expert code review specialist",
+    "prompt": "Review code for security, performance, and best practices",
+    "tools": ["Read", "Grep", "Glob"],
+    "model": "opus"
+  },
+  "test-runner": {
+    "description": "Runs and analyzes test suites",
+    "prompt": "Execute tests and report results",
+    "tools": ["Bash", "Read"]
+  }
+}`,
+				description: 'Custom subagents that Claude can invoke via the Agent tool. Each agent has: description (when to use), prompt (system instructions), tools (optional restriction), model (optional override: sonnet/opus/haiku). Add "Agent" to Allowed Tools to enable.',
 			},
 		],
 	};
