@@ -1,11 +1,16 @@
 import type {
 	IDataObject,
 	IExecuteFunctions,
+	ILoadOptionsFunctions,
 	INodeExecutionData,
+	INodePropertyOptions,
 	INodeType,
 	INodeTypeDescription,
 } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
+import { promises as fs } from 'fs';
+import { homedir } from 'os';
+import { join } from 'path';
 
 export class ClaudeCode implements INodeType {
 	description: INodeTypeDescription = {
@@ -284,14 +289,27 @@ export class ClaudeCode implements INodeType {
 				],
 			},
 
-			// ── MCP Servers ──
+			// ── MCP Servers (from local settings) ──
 			{
-				displayName: 'MCP Servers',
+				displayName: 'MCP Servers (From Settings)',
+				name: 'mcpServerNames',
+				type: 'multiOptions',
+				typeOptions: {
+					loadOptionsMethod: 'getAvailableMcpServers',
+				},
+				default: [],
+				description: 'Select MCP servers from your ~/.claude.json config. Docker: mount ~/.claude.json as a volume.',
+			},
+
+			// ── MCP Servers (manual add) ──
+			{
+				displayName: 'Additional MCP Servers',
 				name: 'mcpServersCollection',
 				type: 'fixedCollection',
 				typeOptions: { multipleValues: true },
 				default: {},
-				placeholder: 'Add MCP Server',
+				placeholder: 'Add Custom MCP Server',
+				description: 'Manually add MCP servers not in your settings file',
 				options: [
 					{
 						displayName: 'Servers',
@@ -447,6 +465,48 @@ export class ClaudeCode implements INodeType {
 		],
 	};
 
+	methods = {
+		loadOptions: {
+			async getAvailableMcpServers(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
+				const options: INodePropertyOptions[] = [];
+				const settingsPaths = [
+					join(homedir(), '.claude.json'),
+					join(homedir(), '.claude', 'settings.json'),
+					join(homedir(), '.claude', 'settings.local.json'),
+				];
+				const seen = new Set<string>();
+
+				for (const filePath of settingsPaths) {
+					try {
+						const content = await fs.readFile(filePath, 'utf-8');
+						const config = JSON.parse(content);
+						const servers = config.mcpServers || {};
+						for (const name of Object.keys(servers)) {
+							if (seen.has(name)) continue;
+							seen.add(name);
+							const server = servers[name];
+							const label = server.command
+								? `${name} (${server.command} ${(server.args || []).join(' ')})`
+								: `${name} (${server.type || 'stdio'})`;
+							options.push({ name: label, value: name });
+						}
+					} catch {
+						// File not found or invalid JSON — skip
+					}
+				}
+
+				if (options.length === 0) {
+					options.push({
+						name: '(No MCP servers found in ~/.claude.json)',
+						value: '',
+					});
+				}
+
+				return options;
+			},
+		},
+	};
+
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const items = this.getInputData();
 		const returnData: INodeExecutionData[] = [];
@@ -588,12 +648,38 @@ async function executeItem(
 		options.settingSources = settingSources;
 	}
 
-	// ── MCP Servers (fixedCollection → SDK format) ──
+	// ── MCP Servers (from settings + manual) ──
+	const mcpServers: Record<string, unknown> = {};
+
+	// Load selected servers from settings files
+	const selectedMcpNames = this.getNodeParameter('mcpServerNames', itemIndex, []) as string[];
+	if (selectedMcpNames.length > 0) {
+		const settingsPaths = [
+			join(homedir(), '.claude.json'),
+			join(homedir(), '.claude', 'settings.json'),
+			join(homedir(), '.claude', 'settings.local.json'),
+		];
+		for (const filePath of settingsPaths) {
+			try {
+				const content = await fs.readFile(filePath, 'utf-8');
+				const config = JSON.parse(content);
+				const servers = config.mcpServers || {};
+				for (const name of selectedMcpNames) {
+					if (servers[name] && !mcpServers[name]) {
+						mcpServers[name] = servers[name];
+					}
+				}
+			} catch {
+				// File not found or invalid — skip
+			}
+		}
+	}
+
+	// Add manually configured servers
 	const mcpCollection = this.getNodeParameter('mcpServersCollection', itemIndex, {}) as {
 		servers?: Array<{ name: string; type: string; command?: string; args?: string; url?: string; envVars?: string }>;
 	};
 	if (mcpCollection.servers && mcpCollection.servers.length > 0) {
-		const mcpServers: Record<string, unknown> = {};
 		for (const server of mcpCollection.servers) {
 			if (!server.name) continue;
 			const envObj: Record<string, string> = {};
@@ -617,9 +703,10 @@ async function executeItem(
 				};
 			}
 		}
-		if (Object.keys(mcpServers).length > 0) {
-			options.mcpServers = mcpServers;
-		}
+	}
+
+	if (Object.keys(mcpServers).length > 0) {
+		options.mcpServers = mcpServers;
 	}
 
 	// ── Plugins (fixedCollection → SDK format) ──
